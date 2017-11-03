@@ -19,5 +19,6 @@ func main() {
 	p.Parse(f, func(r *ngparser.Record) {
 		// if you wanna do some processing to the record
 	})
-	fmt.Printf("%+v\n", p.Stats(ngparser.Pages, 1000))
+	fmt.Printf("%+v\n", p.Stats(ngparser.IPs, 1000))
+	fmt.Println(p.IPsCount())
 }

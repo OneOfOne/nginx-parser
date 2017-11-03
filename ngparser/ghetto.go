@@ -63,6 +63,7 @@ type Parser struct {
 	mux   sync.RWMutex
 	data  [maxType]stats
 	count uint64
+	ipv6  uint64
 }
 
 func New() *Parser {
@@ -74,8 +75,8 @@ func New() *Parser {
 }
 
 func (p *Parser) Parse(r io.Reader, fn func(r *Record)) {
-	p.mux.Lock()
-	defer p.mux.Unlock()
+	// p.mux.Lock()
+	// defer p.mux.Unlock()
 	var (
 		sc  = bufio.NewScanner(r)
 		in  = make(chan string, runtime.NumCPU())
@@ -107,13 +108,19 @@ func (p *Parser) Parse(r io.Reader, fn func(r *Record)) {
 			cleanPath = cleanPath[:idx]
 		}
 
-		p.data[IPs][r.IP]++
+		p.mux.Lock()
+		ipCnt := p.data[IPs][r.IP]
+		if strings.IndexByte(r.IP, ':') > -1 && ipCnt == 0 {
+			p.ipv6++
+		}
+		p.data[IPs][r.IP] = ipCnt + 1
 		p.data[StatusCodes][r.Status]++
 		p.data[Pages][cleanPath]++
 		p.data[Hits][r.Filename]++
 		p.data[UserAgents][r.UserAgent]++ // probably should parse the agent and store something like Chrome-XX, IE11, Edge, etc.
 		p.data[Extensions][filepath.Ext(cleanPath)]++
 		p.count++
+		p.mux.Unlock()
 	}
 }
 
@@ -133,6 +140,14 @@ func (p *Parser) Count() (l uint64) {
 	l = p.count
 	p.mux.RUnlock()
 	return
+}
+
+func (p *Parser) IPsCount() (v4, v6 uint64) {
+	p.mux.RLock()
+	total := uint64(len(p.data[IPs]))
+	ipv6 := p.ipv6
+	p.mux.RUnlock()
+	return total - ipv6, ipv6
 }
 
 func (p *Parser) parseLine(wg *sync.WaitGroup, in chan string, out chan *Record) {
